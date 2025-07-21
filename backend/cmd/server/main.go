@@ -60,7 +60,21 @@ func main() {
 	authService := services.NewAuthService(userRepo)
 	
 	// Initialize session store
-	sessionStore := sessions.NewCookieStore([]byte(os.Getenv("SESSION_KEY")))
+	sessionKey := os.Getenv("SESSION_KEY")
+	if sessionKey == "" {
+		sessionKey = "default-session-key-change-in-production"
+		log.Println("Warning: Using default session key. Set SESSION_KEY in .env for production.")
+	}
+	sessionStore := sessions.NewCookieStore([]byte(sessionKey))
+	
+	// Configure session store for better security and compatibility
+	sessionStore.Options = &sessions.Options{
+		Path:     "/",
+		MaxAge:   86400 * 7, // 7 days
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+	}
 	
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService, sessionStore)

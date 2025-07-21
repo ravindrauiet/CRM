@@ -46,10 +46,24 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	// Create session
-	session, _ := h.sessionStore.Get(r, "session")
+	session, err := h.sessionStore.Get(r, "session")
+	if err != nil {
+		log.Println("Error getting session:", err)
+		http.Error(w, "Session error", http.StatusInternalServerError)
+		return
+	}
+	
 	session.Values["user_id"] = user.ID
 	session.Values["is_admin"] = user.IsAdmin
-	session.Save(r, w)
+	session.Values["username"] = user.Username
+	
+	if err := session.Save(r, w); err != nil {
+		log.Println("Error saving session:", err)
+		http.Error(w, "Session error", http.StatusInternalServerError)
+		return
+	}
+	
+	log.Println("Session created successfully for user:", user.Username)
 	
 	log.Println("User", credentials.Username, "logged in successfully")
 	
