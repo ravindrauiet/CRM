@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"maydiv-crm/internal/database"
 	"maydiv-crm/internal/handlers"
 	"maydiv-crm/internal/repository"
@@ -55,6 +57,7 @@ func main() {
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db.DB)
 	taskRepo := repository.NewTaskRepository(db.DB)
+	pipelineRepo := repository.NewPipelineRepository(db.DB)
 	
 	// Initialize services
 	authService := services.NewAuthService(userRepo)
@@ -80,6 +83,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService, sessionStore)
 	userHandler := handlers.NewUserHandler(userRepo, sessionStore)
 	taskHandler := handlers.NewTaskHandler(taskRepo, sessionStore)
+	pipelineHandler := handlers.NewPipelineHandler(pipelineRepo, userRepo, sessionStore)
 	
 	// Setup routes
 	mux := http.NewServeMux()
@@ -91,10 +95,39 @@ func main() {
 	// User routes
 	mux.HandleFunc("/api/users", userHandler.HandleUsers)
 	
-	// Task routes
+	// Legacy Task routes (keeping for backward compatibility)
 	mux.HandleFunc("/api/tasks", taskHandler.HandleTasks)
 	mux.HandleFunc("/api/mytasks", taskHandler.HandleMyTasks)
 	mux.HandleFunc("/api/tasks/", taskHandler.HandleTaskStatus)
+	
+	// New Pipeline routes
+	mux.HandleFunc("/api/pipeline/jobs", pipelineHandler.HandleJobs)
+	mux.HandleFunc("/api/pipeline/myjobs", pipelineHandler.HandleMyJobs)
+	mux.HandleFunc("/api/debug", pipelineHandler.HandleDebug)
+	
+	// Test endpoint
+	mux.HandleFunc("/api/test", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"message": "Test endpoint working"}`))
+	})
+	
+	// Handle all pipeline job routes with ID
+	mux.HandleFunc("/api/pipeline/jobs/", func(w http.ResponseWriter, r *http.Request) {
+		// Route to specific job handlers based on path
+		path := r.URL.Path
+		fmt.Printf("Pipeline job route accessed: %s\n", path)
+		
+		if strings.Contains(path, "/stage2") {
+			pipelineHandler.HandleStage2Update(w, r)
+		} else if strings.Contains(path, "/stage3") {
+			pipelineHandler.HandleStage3Update(w, r)
+		} else if strings.Contains(path, "/stage4") {
+			pipelineHandler.HandleStage4Update(w, r)
+		} else {
+			// Default to job details
+			pipelineHandler.HandleJobByID(w, r)
+		}
+	})
 	
 	// CORS middleware
 	handler := withCORS(mux)

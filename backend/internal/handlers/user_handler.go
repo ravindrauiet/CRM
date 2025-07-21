@@ -53,10 +53,31 @@ func (h *UserHandler) getUsers(w http.ResponseWriter, r *http.Request) {
 
 // createUser creates a new user
 func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
-	var user models.UserCreate
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+	var userCreate struct {
+		Username    string `json:"username"`
+		Password    string `json:"password"`
+		Designation string `json:"designation"`
+		IsAdmin     bool   `json:"is_admin"`
+		Role        string `json:"role"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&userCreate); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
+	}
+	
+	// Set default role if not provided
+	if userCreate.Role == "" {
+		userCreate.Role = "stage1_employee"
+	}
+	
+	// Create user with hashed password
+	user := models.UserCreate{
+		Username:     userCreate.Username,
+		PasswordHash: userCreate.Password, // For now, store plain text (as per current system)
+		Designation:  userCreate.Designation,
+		IsAdmin:      userCreate.IsAdmin,
+		Role:         userCreate.Role,
 	}
 	
 	if err := h.userRepo.Create(&user); err != nil {

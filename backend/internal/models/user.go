@@ -9,6 +9,7 @@ type User struct {
 	PasswordHash string    `json:"-"` // Don't expose password in JSON
 	Designation  string    `json:"designation"`
 	IsAdmin      bool      `json:"is_admin"`
+	Role         string    `json:"role"`
 	CreatedAt    time.Time `json:"created_at,omitempty"`
 }
 
@@ -18,6 +19,7 @@ type UserCreate struct {
 	PasswordHash string `json:"password_hash" validate:"required"`
 	Designation  string `json:"designation" validate:"required"`
 	IsAdmin      bool   `json:"is_admin"`
+	Role         string `json:"role"`
 }
 
 // UserLogin represents login credentials
@@ -32,4 +34,5 @@ type UserResponse struct {
 	Username    string `json:"username"`
 	Designation string `json:"designation"`
 	IsAdmin     bool   `json:"is_admin"`
+	Role        string `json:"role"`
 } 

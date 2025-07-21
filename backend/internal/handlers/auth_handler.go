@@ -70,6 +70,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"success": true,
 		"is_admin": user.IsAdmin,
+		"role": user.Role,
+		"username": user.Username,
 	}
 	
 	writeJSON(w, response)
