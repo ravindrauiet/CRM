@@ -145,6 +145,20 @@ func (r *PipelineRepository) GetJobsByUserRole(userID int, role string) ([]model
 	
 	var query string
 	switch role {
+	case "stage1_employee":
+		query = `
+			SELECT 
+				pj.id, pj.job_no, pj.current_stage, pj.status, pj.created_by, 
+				pj.assigned_to_stage2, pj.assigned_to_stage3, pj.customer_id,
+				pj.created_at, pj.updated_at,
+				u1.username as created_by_user
+			FROM pipeline_jobs pj
+			LEFT JOIN users u1 ON pj.created_by = u1.id
+			WHERE pj.created_by = ? AND pj.current_stage IN ('stage1', 'stage2', 'stage3', 'stage4')
+			ORDER BY pj.created_at DESC
+		`
+		log.Printf("Stage1 query: %s", query)
+		log.Printf("Querying with userID: %d", userID)
 	case "stage2_employee":
 		query = `
 			SELECT 
@@ -212,6 +226,15 @@ func (r *PipelineRepository) GetJobsByUserRole(userID int, role string) ([]model
 		log.Printf("Error counting assigned jobs: %v", err)
 	} else {
 		log.Printf("Jobs assigned to user %d: %d", userID, assignedCount)
+	}
+	
+	// Check if there are any jobs created by this user (for stage1 employees)
+	var createdCount int
+	err = r.db.QueryRow("SELECT COUNT(*) FROM pipeline_jobs WHERE created_by = ?", userID).Scan(&createdCount)
+	if err != nil {
+		log.Printf("Error counting created jobs: %v", err)
+	} else {
+		log.Printf("Jobs created by user %d: %d", userID, createdCount)
 	}
 	
 	var jobs []models.PipelineJobResponse

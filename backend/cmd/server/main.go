@@ -94,6 +94,40 @@ func main() {
 	mux.HandleFunc("/api/login", authHandler.Login)
 	mux.HandleFunc("/api/logout", authHandler.Logout)
 	
+	// Session check endpoint
+	mux.HandleFunc("/api/session", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		
+		session, err := sessionStore.Get(r, "session")
+		if err != nil {
+			http.Error(w, "Session error", http.StatusUnauthorized)
+			return
+		}
+		
+		userID, ok := session.Values["user_id"].(int)
+		if !ok {
+			http.Error(w, "Not authenticated", http.StatusUnauthorized)
+			return
+		}
+		
+		// Get user details
+		user, err := userRepo.GetByID(userID)
+		if err != nil {
+			http.Error(w, "User not found", http.StatusNotFound)
+			return
+		}
+		
+		response := map[string]interface{}{
+			"authenticated": true,
+			"user_id": userID,
+			"username": user.Username,
+			"is_admin": user.IsAdmin,
+			"role": user.Role,
+		}
+		
+		json.NewEncoder(w).Encode(response)
+	})
+	
 	// User routes
 	mux.HandleFunc("/api/users", userHandler.HandleUsers)
 	
