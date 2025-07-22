@@ -1,6 +1,8 @@
 package main
 
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -109,6 +111,223 @@ func main() {
 	mux.HandleFunc("/api/test", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"message": "Test endpoint working"}`))
+	})
+	
+	// Debug endpoint to check stage1 data
+	mux.HandleFunc("/api/debug/stage1", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		
+		// Get all stage1 data
+		rows, err := db.DB.Query("SELECT * FROM stage1_data")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+		
+		var results []map[string]interface{}
+		columns, _ := rows.Columns()
+		count := len(columns)
+		values := make([]interface{}, count)
+		valuePtrs := make([]interface{}, count)
+		
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+		
+		for rows.Next() {
+			err := rows.Scan(valuePtrs...)
+			if err != nil {
+				continue
+			}
+			
+			row := make(map[string]interface{})
+			for i, col := range columns {
+				val := values[i]
+				row[col] = val
+			}
+			results = append(results, row)
+		}
+		
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"stage1_data": results,
+			"count": len(results),
+		})
+	})
+	
+		// Debug endpoint to check stage2 data
+	mux.HandleFunc("/api/debug/stage2", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		// Get all stage2 data
+		rows, err := db.DB.Query("SELECT * FROM stage2_data")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var results []map[string]interface{}
+		columns, _ := rows.Columns()
+		count := len(columns)
+		values := make([]interface{}, count)
+		valuePtrs := make([]interface{}, count)
+
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		for rows.Next() {
+			err := rows.Scan(valuePtrs...)
+			if err != nil {
+				continue
+			}
+
+			row := make(map[string]interface{})
+			for i, col := range columns {
+				val := values[i]
+				row[col] = val
+			}
+			results = append(results, row)
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"stage2_data": results,
+			"count": len(results),
+		})
+	})
+
+	// Debug endpoint to check stage3 data
+	mux.HandleFunc("/api/debug/stage3", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		// Get all stage3 data
+		rows, err := db.DB.Query("SELECT * FROM stage3_data")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var results []map[string]interface{}
+		columns, _ := rows.Columns()
+		count := len(columns)
+		values := make([]interface{}, count)
+		valuePtrs := make([]interface{}, count)
+
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		for rows.Next() {
+			err := rows.Scan(valuePtrs...)
+			if err != nil {
+				continue
+			}
+
+			row := make(map[string]interface{})
+			for i, col := range columns {
+				val := values[i]
+				row[col] = val
+			}
+			results = append(results, row)
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"stage3_data": results,
+			"count": len(results),
+		})
+	})
+
+	// Debug endpoint to check stage4 data
+	mux.HandleFunc("/api/debug/stage4", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		// Get all stage4 data
+		rows, err := db.DB.Query("SELECT * FROM stage4_data")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+
+		var results []map[string]interface{}
+		columns, _ := rows.Columns()
+		count := len(columns)
+		values := make([]interface{}, count)
+		valuePtrs := make([]interface{}, count)
+
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		for rows.Next() {
+			err := rows.Scan(valuePtrs...)
+			if err != nil {
+				continue
+			}
+
+			row := make(map[string]interface{})
+			for i, col := range columns {
+				val := values[i]
+				row[col] = val
+			}
+			results = append(results, row)
+		}
+
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"stage4_data": results,
+			"count": len(results),
+		})
+	})
+	
+	// Debug endpoint to check job status
+	mux.HandleFunc("/api/debug/jobs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		
+		// Get all pipeline jobs with their current stage
+		rows, err := db.DB.Query(`
+			SELECT pj.id, pj.job_no, pj.current_stage, pj.status, 
+			       s1.consignee, s1.commodity,
+			       s2.hsn_code, s2.filing_requirement
+			FROM pipeline_jobs pj
+			LEFT JOIN stage1_data s1 ON pj.id = s1.job_id
+			LEFT JOIN stage2_data s2 ON pj.id = s2.job_id
+			ORDER BY pj.id
+		`)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
+		
+		var results []map[string]interface{}
+		for rows.Next() {
+			var id int
+			var jobNo, currentStage, status, consignee, commodity, hsnCode, filingRequirement sql.NullString
+			
+			err := rows.Scan(&id, &jobNo, &currentStage, &status, &consignee, &commodity, &hsnCode, &filingRequirement)
+			if err != nil {
+				continue
+			}
+			
+			row := map[string]interface{}{
+				"id": id,
+				"job_no": jobNo.String,
+				"current_stage": currentStage.String,
+				"status": status.String,
+				"consignee": consignee.String,
+				"commodity": commodity.String,
+				"hsn_code": hsnCode.String,
+				"filing_requirement": filingRequirement.String,
+			}
+			results = append(results, row)
+		}
+		
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"jobs": results,
+			"count": len(results),
+		})
 	})
 	
 	// Handle all pipeline job routes with ID

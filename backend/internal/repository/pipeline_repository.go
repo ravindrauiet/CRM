@@ -302,6 +302,9 @@ func (r *PipelineRepository) CreateJob(req *models.Stage1CreateRequest, createdB
 
 // UpdateStage2Data updates stage 2 data and advances job to stage 2
 func (r *PipelineRepository) UpdateStage2Data(jobID int, req *models.Stage2UpdateRequest, userID int) error {
+	log.Printf("UpdateStage2Data called with jobID: %d, userID: %d", jobID, userID)
+	log.Printf("Stage2 data: %+v", req)
+	
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
@@ -309,7 +312,13 @@ func (r *PipelineRepository) UpdateStage2Data(jobID int, req *models.Stage2Updat
 	defer tx.Rollback()
 
 	// Insert or update stage2 data
-	_, err = tx.Exec(`
+	log.Printf("Executing stage2 data insert/update for job %d", jobID)
+	log.Printf("HSNCode: %s", req.HSNCode)
+	log.Printf("FilingRequirement: %s", req.FilingRequirement)
+	log.Printf("DutyAmount: %f", req.DutyAmount)
+	log.Printf("OceanFreight: %f", req.OceanFreight)
+	
+	stage2Result, err := tx.Exec(`
 		INSERT INTO stage2_data (
 			job_id, hsn_code, filing_requirement, checklist_sent_date, approval_date,
 			bill_of_entry_no, bill_of_entry_date, debit_note, debit_paid_by,
@@ -341,19 +350,32 @@ func (r *PipelineRepository) UpdateStage2Data(jobID int, req *models.Stage2Updat
 		req.OceanFreight, req.DestinationCharges, parseDate(req.OriginalDoctRecdDate),
 		req.DRNNo, req.IRNNo, req.DocumentsType,
 	)
+	
+	if err != nil {
+		log.Printf("Error executing stage2 data insert/update: %v", err)
+		return err
+	}
+	
+	stage2RowsAffected, _ := stage2Result.RowsAffected()
+	log.Printf("Stage2 data insert/update affected %d rows", stage2RowsAffected)
 	if err != nil {
 		return err
 	}
 
 	// Update job stage if not already in stage2 or beyond
-	_, err = tx.Exec(`
+	log.Printf("Updating job stage to stage2 for job %d", jobID)
+	jobResult, err := tx.Exec(`
 		UPDATE pipeline_jobs 
 		SET current_stage = 'stage2', updated_at = CURRENT_TIMESTAMP 
 		WHERE id = ? AND current_stage = 'stage1'
 	`, jobID)
 	if err != nil {
+		log.Printf("Error updating job stage: %v", err)
 		return err
 	}
+	
+	jobRowsAffected, _ := jobResult.RowsAffected()
+	log.Printf("Job stage update affected %d rows", jobRowsAffected)
 
 	// Add job update
 	_, err = tx.Exec(`
@@ -364,11 +386,21 @@ func (r *PipelineRepository) UpdateStage2Data(jobID int, req *models.Stage2Updat
 		return err
 	}
 
-	return tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("Error committing transaction: %v", err)
+		return err
+	}
+
+	log.Printf("Stage2 data updated successfully for job %d", jobID)
+	return nil
 }
 
 // UpdateStage3Data updates stage 3 data and advances job to stage 3
 func (r *PipelineRepository) UpdateStage3Data(jobID int, req *models.Stage3UpdateRequest, userID int) error {
+	log.Printf("UpdateStage3Data called with jobID: %d, userID: %d", jobID, userID)
+	log.Printf("Stage3 data: %+v", req)
+	
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
@@ -376,7 +408,13 @@ func (r *PipelineRepository) UpdateStage3Data(jobID int, req *models.Stage3Updat
 	defer tx.Rollback()
 
 	// Insert or update stage3 data
-	_, err = tx.Exec(`
+	log.Printf("Executing stage3 data insert/update for job %d", jobID)
+	log.Printf("Custodian: %s", req.Custodian)
+	log.Printf("DispatchInfo: %s", req.DispatchInfo)
+	log.Printf("ClearanceExps: %f", req.ClearanceExps)
+	log.Printf("StampDuty: %f", req.StampDuty)
+	
+	stage3Result, err := tx.Exec(`
 		INSERT INTO stage3_data (
 			job_id, exam_date, out_of_charge, clearance_exps, stamp_duty,
 			custodian, offloading_charges, transport_detention, dispatch_info
@@ -397,8 +435,11 @@ func (r *PipelineRepository) UpdateStage3Data(jobID int, req *models.Stage3Updat
 		req.OffloadingCharges, req.TransportDetention, req.DispatchInfo,
 	)
 	if err != nil {
+		log.Printf("Error executing stage3 data insert/update: %v", err)
 		return err
 	}
+	stage3RowsAffected, _ := stage3Result.RowsAffected()
+	log.Printf("Stage3 data insert/update affected %d rows", stage3RowsAffected)
 
 	// Delete existing containers and add new ones
 	_, err = tx.Exec("DELETE FROM stage3_containers WHERE job_id = ?", jobID)
@@ -420,14 +461,18 @@ func (r *PipelineRepository) UpdateStage3Data(jobID int, req *models.Stage3Updat
 	}
 
 	// Update job stage if not already in stage3 or beyond
-	_, err = tx.Exec(`
+	log.Printf("Updating job stage to stage3 for job %d", jobID)
+	jobResult, err := tx.Exec(`
 		UPDATE pipeline_jobs 
 		SET current_stage = 'stage3', updated_at = CURRENT_TIMESTAMP 
 		WHERE id = ? AND current_stage IN ('stage1', 'stage2')
 	`, jobID)
 	if err != nil {
+		log.Printf("Error updating job stage: %v", err)
 		return err
 	}
+	jobRowsAffected, _ := jobResult.RowsAffected()
+	log.Printf("Job stage update affected %d rows", jobRowsAffected)
 
 	// Add job update
 	_, err = tx.Exec(`
@@ -435,14 +480,24 @@ func (r *PipelineRepository) UpdateStage3Data(jobID int, req *models.Stage3Updat
 		VALUES (?, ?, 'stage3', 'data_update', 'Stage 3 data updated')
 	`, jobID, userID)
 	if err != nil {
+		log.Printf("Error adding job update: %v", err)
 		return err
 	}
 
-	return tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("Error committing transaction: %v", err)
+		return err
+	}
+	log.Printf("Stage3 data updated successfully for job %d", jobID)
+	return nil
 }
 
 // UpdateStage4Data updates stage 4 data and completes the job
 func (r *PipelineRepository) UpdateStage4Data(jobID int, req *models.Stage4UpdateRequest, userID int) error {
+	log.Printf("UpdateStage4Data called with jobID: %d, userID: %d", jobID, userID)
+	log.Printf("Stage4 data: %+v", req)
+	
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
@@ -450,7 +505,14 @@ func (r *PipelineRepository) UpdateStage4Data(jobID int, req *models.Stage4Updat
 	defer tx.Rollback()
 
 	// Insert or update stage4 data
-	_, err = tx.Exec(`
+	log.Printf("Executing stage4 data insert/update for job %d", jobID)
+	log.Printf("BillNo: %s", req.BillNo)
+	log.Printf("BillMail: %s", req.BillMail)
+	log.Printf("AmountTaxable: %f", req.AmountTaxable)
+	log.Printf("GST5Percent: %f", req.GST5Percent)
+	log.Printf("GST18Percent: %f", req.GST18Percent)
+	
+	stage4Result, err := tx.Exec(`
 		INSERT INTO stage4_data (
 			job_id, bill_no, bill_date, amount_taxable, gst_5_percent, gst_18_percent,
 			bill_mail, bill_courier, courier_date, acknowledge_date, acknowledge_name
@@ -473,8 +535,11 @@ func (r *PipelineRepository) UpdateStage4Data(jobID int, req *models.Stage4Updat
 		parseDate(req.CourierDate), parseDate(req.AcknowledgeDate), req.AcknowledgeName,
 	)
 	if err != nil {
+		log.Printf("Error executing stage4 data insert/update: %v", err)
 		return err
 	}
+	stage4RowsAffected, _ := stage4Result.RowsAffected()
+	log.Printf("Stage4 data insert/update affected %d rows", stage4RowsAffected)
 
 	// Update job stage to stage4 and potentially completed
 	var newStage string
@@ -484,14 +549,18 @@ func (r *PipelineRepository) UpdateStage4Data(jobID int, req *models.Stage4Updat
 		newStage = "stage4"
 	}
 
-	_, err = tx.Exec(`
+	log.Printf("Updating job stage to %s for job %d", newStage, jobID)
+	jobResult, err := tx.Exec(`
 		UPDATE pipeline_jobs 
 		SET current_stage = ?, updated_at = CURRENT_TIMESTAMP 
 		WHERE id = ?
 	`, newStage, jobID)
 	if err != nil {
+		log.Printf("Error updating job stage: %v", err)
 		return err
 	}
+	jobRowsAffected, _ := jobResult.RowsAffected()
+	log.Printf("Job stage update affected %d rows", jobRowsAffected)
 
 	// Add job update
 	message := "Stage 4 data updated"
@@ -504,22 +573,34 @@ func (r *PipelineRepository) UpdateStage4Data(jobID int, req *models.Stage4Updat
 		VALUES (?, ?, 'stage4', 'data_update', ?)
 	`, jobID, userID, message)
 	if err != nil {
+		log.Printf("Error adding job update: %v", err)
 		return err
 	}
 
-	return tx.Commit()
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("Error committing transaction: %v", err)
+		return err
+	}
+	log.Printf("Stage4 data updated successfully for job %d", jobID)
+	return nil
 }
 
 // Helper functions
 func (r *PipelineRepository) loadJobStageData(job *models.PipelineJobResponse) error {
+	log.Printf("loadJobStageData called for job %d (current stage: %s)", job.ID, job.CurrentStage)
+	
 	// Load Stage 1 data
 	stage1, err := r.getStage1Data(job.ID)
 	if err == nil {
 		job.Stage1 = stage1
+		log.Printf("Stage1 data loaded successfully for job %d", job.ID)
+	} else {
+		log.Printf("Failed to load Stage1 data for job %d: %v", job.ID, err)
 	}
 
 	// Load Stage 2 data if applicable
-	if job.CurrentStage != "stage1" {
+	if job.CurrentStage == "stage2" || job.CurrentStage == "stage3" || job.CurrentStage == "stage4" || job.CurrentStage == "completed" {
 		stage2, err := r.getStage2Data(job.ID)
 		if err == nil {
 			job.Stage2 = stage2
@@ -531,11 +612,17 @@ func (r *PipelineRepository) loadJobStageData(job *models.PipelineJobResponse) e
 		stage3, err := r.getStage3Data(job.ID)
 		if err == nil {
 			job.Stage3 = stage3
+			log.Printf("Stage3 data loaded successfully for job %d", job.ID)
+		} else {
+			log.Printf("Failed to load Stage3 data for job %d: %v", job.ID, err)
 		}
 
 		containers, err := r.getStage3Containers(job.ID)
 		if err == nil {
 			job.Stage3Containers = containers
+			log.Printf("Stage3 containers loaded successfully for job %d", job.ID)
+		} else {
+			log.Printf("Failed to load Stage3 containers for job %d: %v", job.ID, err)
 		}
 	}
 
@@ -544,6 +631,9 @@ func (r *PipelineRepository) loadJobStageData(job *models.PipelineJobResponse) e
 		stage4, err := r.getStage4Data(job.ID)
 		if err == nil {
 			job.Stage4 = stage4
+			log.Printf("Stage4 data loaded successfully for job %d", job.ID)
+		} else {
+			log.Printf("Failed to load Stage4 data for job %d: %v", job.ID, err)
 		}
 	}
 
@@ -551,6 +641,8 @@ func (r *PipelineRepository) loadJobStageData(job *models.PipelineJobResponse) e
 }
 
 func (r *PipelineRepository) getStage1Data(jobID int) (*models.Stage1Data, error) {
+	log.Printf("getStage1Data called for jobID: %d", jobID)
+	
 	var stage1 models.Stage1Data
 	query := `
 		SELECT id, job_id, job_no, job_date, edi_job_no, edi_date, consignee, shipper,
@@ -576,10 +668,18 @@ func (r *PipelineRepository) getStage1Data(jobID int) (*models.Stage1Data, error
 		&stage1.CreatedAt, &stage1.UpdatedAt,
 	)
 
-	return &stage1, err
+	if err != nil {
+		log.Printf("Error getting stage1 data for job %d: %v", jobID, err)
+		return nil, err
+	}
+
+	log.Printf("Stage1 data found for job %d: Consignee=%s, Commodity=%s", jobID, stage1.Consignee, stage1.Commodity)
+	return &stage1, nil
 }
 
 func (r *PipelineRepository) getStage2Data(jobID int) (*models.Stage2Data, error) {
+	log.Printf("getStage2Data called for jobID: %d", jobID)
+	
 	var stage2 models.Stage2Data
 	query := `
 		SELECT id, job_id, hsn_code, filing_requirement, checklist_sent_date, approval_date,
@@ -602,10 +702,18 @@ func (r *PipelineRepository) getStage2Data(jobID int) (*models.Stage2Data, error
 		&stage2.QueryUpload, &stage2.ReplyUpload, &stage2.CreatedAt, &stage2.UpdatedAt,
 	)
 
-	return &stage2, err
+	if err != nil {
+		log.Printf("Error getting stage2 data for job %d: %v", jobID, err)
+		return nil, err
+	}
+
+	log.Printf("Stage2 data found for job %d: HSNCode=%s, FilingRequirement=%s", jobID, stage2.HSNCode, stage2.FilingRequirement)
+	return &stage2, nil
 }
 
 func (r *PipelineRepository) getStage3Data(jobID int) (*models.Stage3Data, error) {
+	log.Printf("getStage3Data called for jobID: %d", jobID)
+	
 	var stage3 models.Stage3Data
 	query := `
 		SELECT id, job_id, exam_date, out_of_charge, clearance_exps, stamp_duty,
@@ -621,6 +729,12 @@ func (r *PipelineRepository) getStage3Data(jobID int) (*models.Stage3Data, error
 		&stage3.BillOfEntryUpload, &stage3.CreatedAt, &stage3.UpdatedAt,
 	)
 
+	if err != nil {
+		log.Printf("Error getting stage3 data for job %d: %v", jobID, err)
+		return nil, err
+	}
+
+	log.Printf("Stage3 data found for job %d: Custodian=%s, DispatchInfo=%s", jobID, stage3.Custodian, stage3.DispatchInfo)
 	return &stage3, err
 }
 
@@ -654,6 +768,8 @@ func (r *PipelineRepository) getStage3Containers(jobID int) ([]models.Stage3Cont
 }
 
 func (r *PipelineRepository) getStage4Data(jobID int) (*models.Stage4Data, error) {
+	log.Printf("getStage4Data called for jobID: %d", jobID)
+	
 	var stage4 models.Stage4Data
 	query := `
 		SELECT id, job_id, bill_no, bill_date, amount_taxable, gst_5_percent, gst_18_percent,
@@ -670,6 +786,12 @@ func (r *PipelineRepository) getStage4Data(jobID int) (*models.Stage4Data, error
 		&stage4.CreatedAt, &stage4.UpdatedAt,
 	)
 
+	if err != nil {
+		log.Printf("Error getting stage4 data for job %d: %v", jobID, err)
+		return nil, err
+	}
+
+	log.Printf("Stage4 data found for job %d: BillNo=%s, BillMail=%s", jobID, stage4.BillNo, stage4.BillMail)
 	return &stage4, err
 }
 
