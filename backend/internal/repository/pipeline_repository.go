@@ -145,6 +145,25 @@ func (r *PipelineRepository) GetJobsByUserRole(userID int, role string) ([]model
 	
 	var query string
 	switch role {
+	case "subadmin":
+		// Subadmin sees all jobs (same as admin)
+		query = `
+			SELECT 
+				pj.id, pj.job_no, pj.current_stage, pj.status, pj.created_by, 
+				pj.assigned_to_stage2, pj.assigned_to_stage3, pj.customer_id,
+				pj.created_at, pj.updated_at,
+				u1.username as created_by_user,
+				u2.username as stage2_user_name,
+				u3.username as stage3_user_name,
+				u4.username as customer_name
+			FROM pipeline_jobs pj
+			LEFT JOIN users u1 ON pj.created_by = u1.id
+			LEFT JOIN users u2 ON pj.assigned_to_stage2 = u2.id
+			LEFT JOIN users u3 ON pj.assigned_to_stage3 = u3.id
+			LEFT JOIN users u4 ON pj.customer_id = u4.id
+			ORDER BY pj.created_at DESC
+		`
+		log.Printf("Subadmin query: %s", query)
 	case "stage1_employee":
 		query = `
 			SELECT 
@@ -201,7 +220,15 @@ func (r *PipelineRepository) GetJobsByUserRole(userID int, role string) ([]model
 		return nil, fmt.Errorf("invalid role: %s", role)
 	}
 
-	rows, err := r.db.Query(query, userID)
+	// For subadmin, no userID parameter is needed since they see all jobs
+	var rows *sql.Rows
+	var err error
+	if role == "subadmin" {
+		rows, err = r.db.Query(query)
+	} else {
+		rows, err = r.db.Query(query, userID)
+	}
+	
 	if err != nil {
 		log.Printf("Query error: %v", err)
 		return nil, err
@@ -240,13 +267,39 @@ func (r *PipelineRepository) GetJobsByUserRole(userID int, role string) ([]model
 	var jobs []models.PipelineJobResponse
 	for rows.Next() {
 		var job models.PipelineJobResponse
-		err := rows.Scan(
-			&job.ID, &job.JobNo, &job.CurrentStage, &job.Status, &job.CreatedBy,
-			&job.AssignedToStage2, &job.AssignedToStage3, &job.CustomerID,
-			&job.CreatedAt, &job.UpdatedAt, &job.CreatedByUser,
-		)
-		if err != nil {
-			return nil, err
+		
+		if role == "subadmin" {
+			// Subadmin query includes all user names
+			var stage2UserName, stage3UserName, customerName sql.NullString
+			err := rows.Scan(
+				&job.ID, &job.JobNo, &job.CurrentStage, &job.Status, &job.CreatedBy,
+				&job.AssignedToStage2, &job.AssignedToStage3, &job.CustomerID,
+				&job.CreatedAt, &job.UpdatedAt, &job.CreatedByUser,
+				&stage2UserName, &stage3UserName, &customerName,
+			)
+			if err != nil {
+				return nil, err
+			}
+			
+			if stage2UserName.Valid {
+				job.Stage2UserName = stage2UserName.String
+			}
+			if stage3UserName.Valid {
+				job.Stage3UserName = stage3UserName.String
+			}
+			if customerName.Valid {
+				job.CustomerName = customerName.String
+			}
+		} else {
+			// Employee queries only include created_by_user
+			err := rows.Scan(
+				&job.ID, &job.JobNo, &job.CurrentStage, &job.Status, &job.CreatedBy,
+				&job.AssignedToStage2, &job.AssignedToStage3, &job.CustomerID,
+				&job.CreatedAt, &job.UpdatedAt, &job.CreatedByUser,
+			)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		// Load stage data based on current stage

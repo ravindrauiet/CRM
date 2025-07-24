@@ -182,6 +182,7 @@ INSERT INTO users (username, password_hash, designation, is_admin, role) VALUES
 ('stage2_emp', '123456', 'Customs Officer', FALSE, 'stage2_employee'),
 ('stage3_emp', '123456', 'Logistics Coordinator', FALSE, 'stage3_employee'),
 ('customer1', '123456', 'Client', FALSE, 'customer');
+('subadmin', '123456', 'Sub Administrator', FALSE, 'subadmin');
 
 -- Insert sample pipeline job
 INSERT INTO pipeline_jobs (job_no, current_stage, created_by, assigned_to_stage2, assigned_to_stage3, customer_id) 

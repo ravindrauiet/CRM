@@ -30,7 +30,7 @@ func (db *DB) Migrate() error {
 		password_hash VARCHAR(255) NOT NULL,
 		designation VARCHAR(50) NOT NULL,
 		is_admin BOOLEAN DEFAULT FALSE,
-		role ENUM('admin', 'stage1_employee', 'stage2_employee', 'stage3_employee', 'customer') DEFAULT 'stage1_employee',
+		role ENUM('admin', 'subadmin', 'stage1_employee', 'stage2_employee', 'stage3_employee', 'customer') DEFAULT 'stage1_employee',
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
@@ -228,7 +228,8 @@ func (db *DB) Seed() error {
 	('admin', '123456', 'Administrator', TRUE, 'admin'),
 	('stage2_emp', '123456', 'Customs Officer', FALSE, 'stage2_employee'),
 	('stage3_emp', '123456', 'Logistics Coordinator', FALSE, 'stage3_employee'),
-	('customer1', '123456', 'Client', FALSE, 'customer');
+	('customer1', '123456', 'Client', FALSE, 'customer'),
+	('subadmin', '123456', 'Sub Administrator', FALSE, 'subadmin');
 
 	INSERT INTO pipeline_jobs (job_no, current_stage, created_by, assigned_to_stage2, assigned_to_stage3, customer_id) 
 	VALUES ('JOB001', 'stage1', 1, 2, 3, 4);

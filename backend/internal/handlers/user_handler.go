@@ -24,8 +24,8 @@ func NewUserHandler(userRepo *repository.UserRepository, sessionStore *sessions.
 
 // HandleUsers handles user CRUD operations
 func (h *UserHandler) HandleUsers(w http.ResponseWriter, r *http.Request) {
-	// Check if user is admin
-	if !h.isAdmin(r) {
+	// Check if user is admin or subadmin
+	if !h.isAdminOrSubadmin(r) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -98,4 +98,25 @@ func (h *UserHandler) isAdmin(r *http.Request) bool {
 	
 	adminStatus, ok := isAdmin.(bool)
 	return ok && adminStatus
+}
+
+// isSubadmin checks if the current user is a subadmin
+func (h *UserHandler) isSubadmin(r *http.Request) bool {
+	session, _ := h.sessionStore.Get(r, "session")
+	userID, ok := session.Values["user_id"].(int)
+	if !ok {
+		return false
+	}
+	
+	user, err := h.userRepo.GetByID(userID)
+	if err != nil {
+		return false
+	}
+	
+	return user.Role == "subadmin"
+}
+
+// isAdminOrSubadmin checks if the current user is an admin or subadmin
+func (h *UserHandler) isAdminOrSubadmin(r *http.Request) bool {
+	return h.isAdmin(r) || h.isSubadmin(r)
 } 

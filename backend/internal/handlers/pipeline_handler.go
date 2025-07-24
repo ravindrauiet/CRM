@@ -73,6 +73,17 @@ func (h *PipelineHandler) HandleMyJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Subadmin gets all jobs (same as admin)
+	if user.Role == "subadmin" {
+		jobs, err := h.pipelineRepo.GetAllJobs()
+		if err != nil {
+			http.Error(w, "Failed to fetch jobs", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, jobs)
+		return
+	}
+
 	// Get jobs based on user role
 	fmt.Printf("Getting jobs for user ID %d with role %s\n", userID, user.Role)
 	jobs, err := h.pipelineRepo.GetJobsByUserRole(userID, user.Role)
@@ -290,7 +301,7 @@ func (h *PipelineHandler) HandleStage4Update(w http.ResponseWriter, r *http.Requ
 // Private helper methods
 
 func (h *PipelineHandler) getAllJobs(w http.ResponseWriter, r *http.Request) {
-	if !h.isAdmin(r) {
+	if !h.isAdminOrSubadmin(r) {
 		http.Error(w, "Access denied", http.StatusForbidden)
 		return
 	}
@@ -305,7 +316,7 @@ func (h *PipelineHandler) getAllJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *PipelineHandler) createJob(w http.ResponseWriter, r *http.Request) {
-	if !h.isAdmin(r) {
+	if !h.isAdminOrSubadmin(r) {
 		http.Error(w, "Access denied", http.StatusForbidden)
 		return
 	}
@@ -357,8 +368,8 @@ func (h *PipelineHandler) hasJobAccess(userID int, job *models.PipelineJobRespon
 		return false
 	}
 
-	// Admin has access to all jobs
-	if user.IsAdmin {
+	// Admin and subadmin have access to all jobs
+	if user.IsAdmin || user.Role == "subadmin" {
 		return true
 	}
 
@@ -392,6 +403,29 @@ func (h *PipelineHandler) isAdmin(r *http.Request) bool {
 	}
 
 	return user.IsAdmin
+}
+
+func (h *PipelineHandler) isSubadmin(r *http.Request) bool {
+	session, err := h.sessionStore.Get(r, "session")
+	if err != nil {
+		return false
+	}
+
+	userID, ok := session.Values["user_id"].(int)
+	if !ok {
+		return false
+	}
+
+	user, err := h.userRepo.GetByID(userID)
+	if err != nil {
+		return false
+	}
+
+	return user.Role == "subadmin"
+}
+
+func (h *PipelineHandler) isAdminOrSubadmin(r *http.Request) bool {
+	return h.isAdmin(r) || h.isSubadmin(r)
 }
 
 func (h *PipelineHandler) getUserID(r *http.Request) int {

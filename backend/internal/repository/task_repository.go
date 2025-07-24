@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"log"
 	"maydiv-crm/internal/models"
 	"strings"
 	"time"
@@ -40,6 +41,7 @@ func (r *TaskRepository) GetAll() ([]models.TaskResponse, error) {
 	
 	rows, err := r.db.Query(query)
 	if err != nil {
+		log.Printf("Error executing query: %v", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -51,6 +53,7 @@ func (r *TaskRepository) GetAll() ([]models.TaskResponse, error) {
 		var status sql.NullString
 		
 		if err := rows.Scan(&task.ID, &task.JobID, &task.Description, &task.Priority, &task.Deadline, &assignedTo, &status); err != nil {
+			log.Printf("Error scanning row: %v", err)
 			continue
 		}
 		

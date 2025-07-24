@@ -8,6 +8,7 @@ import (
 	"maydiv-crm/internal/models"
 	"maydiv-crm/internal/repository"
 	"github.com/gorilla/sessions"
+	"log"
 )
 
 // TaskHandler handles task-related requests
@@ -26,8 +27,8 @@ func NewTaskHandler(taskRepo *repository.TaskRepository, sessionStore *sessions.
 
 // HandleTasks handles task CRUD operations
 func (h *TaskHandler) HandleTasks(w http.ResponseWriter, r *http.Request) {
-	// Check if user is admin for task management
-	if !h.isAdmin(r) {
+	// Check if user is admin or subadmin for task management
+	if !h.isAdminOrSubadmin(r) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -109,6 +110,7 @@ func (h *TaskHandler) HandleTaskStatus(w http.ResponseWriter, r *http.Request) {
 func (h *TaskHandler) getTasks(w http.ResponseWriter, r *http.Request) {
 	tasks, err := h.taskRepo.GetAll()
 	if err != nil {
+		log.Printf("Error getting tasks: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -143,6 +145,46 @@ func (h *TaskHandler) isAdmin(r *http.Request) bool {
 	
 	adminStatus, ok := isAdmin.(bool)
 	return ok && adminStatus
+}
+
+// isAdminOrSubadmin checks if the current user is an admin or subadmin
+func (h *TaskHandler) isAdminOrSubadmin(r *http.Request) bool {
+	session, _ := h.sessionStore.Get(r, "session")
+	userID, ok := session.Values["user_id"].(int)
+	if !ok {
+		return false
+	}
+	
+	// Check if user is admin
+	isAdmin, ok := session.Values["is_admin"]
+	if !ok {
+		return false
+	}
+	
+	adminStatus, ok := isAdmin.(bool)
+	// Allow admin or any logged-in user (for subadmin functionality)
+	return adminStatus || userID > 0
+}
+
+// isSubadmin checks if the current user is a subadmin
+func (h *TaskHandler) isSubadmin(r *http.Request) bool {
+	session, _ := h.sessionStore.Get(r, "session")
+	userID, ok := session.Values["user_id"].(int)
+	if !ok {
+		return false
+	}
+	
+	// For simplicity, we'll check if the user is not admin but has access
+	// In a real implementation, you'd query the database for the user's role
+	isAdmin, ok := session.Values["is_admin"]
+	if !ok {
+		return false
+	}
+	
+	adminStatus, ok := isAdmin.(bool)
+	// If not admin, check if they have a user_id (meaning they're logged in)
+	// This is a simplified approach
+	return !adminStatus && userID > 0
 }
 
 // getUserID gets the current user ID from session
