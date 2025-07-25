@@ -142,6 +142,12 @@ func main() {
 	mux.HandleFunc("/api/pipeline/myjobs", pipelineHandler.HandleMyJobs)
 	mux.HandleFunc("/api/debug", pipelineHandler.HandleDebug)
 	
+	// File upload routes
+	mux.HandleFunc("/api/pipeline/files/upload", pipelineHandler.HandleFileUpload)
+	mux.HandleFunc("/api/pipeline/files/download", pipelineHandler.HandleFileDownload)
+	mux.HandleFunc("/api/pipeline/files", pipelineHandler.HandleGetFiles)
+	mux.HandleFunc("/api/pipeline/files/delete", pipelineHandler.HandleDeleteFile)
+	
 	// Test endpoint
 	mux.HandleFunc("/api/test", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

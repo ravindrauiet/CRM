@@ -254,4 +254,34 @@ type Stage4UpdateRequest struct {
 	CourierDate     string  `json:"courier_date"`
 	AcknowledgeDate string  `json:"acknowledge_date"`
 	AcknowledgeName string  `json:"acknowledge_name"`
+}
+
+// JobFile represents uploaded files for pipeline jobs
+type JobFile struct {
+	ID           int       `json:"id" db:"id"`
+	JobID        int       `json:"job_id" db:"job_id"`
+	Stage        string    `json:"stage" db:"stage"`
+	UploadedBy   int       `json:"uploaded_by" db:"uploaded_by"`
+	FileName     string    `json:"file_name" db:"file_name"`
+	OriginalName string    `json:"original_name" db:"original_name"`
+	FilePath     string    `json:"file_path" db:"file_path"`
+	FileSize     int64     `json:"file_size" db:"file_size"`
+	FileType     *string   `json:"file_type" db:"file_type"`
+	Description  *string   `json:"description" db:"description"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UploadedByUser string  `json:"uploaded_by_user,omitempty"`
+}
+
+// FileUploadRequest represents a file upload request
+type FileUploadRequest struct {
+	JobID       int    `json:"job_id" binding:"required"`
+	Stage       string `json:"stage" binding:"required"`
+	Description string `json:"description"`
+}
+
+// FileUploadResponse represents the response after file upload
+type FileUploadResponse struct {
+	Success bool     `json:"success"`
+	Message string   `json:"message"`
+	File    *JobFile `json:"file,omitempty"`
 } 

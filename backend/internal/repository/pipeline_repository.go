@@ -931,4 +931,121 @@ func nullInt(val int) interface{} {
 		return nil
 	}
 	return val
+}
+
+// File upload methods
+func (r *PipelineRepository) UploadFile(jobID int, stage string, uploadedBy int, fileName, originalName, filePath string, fileSize int64, fileType, description string) (*models.JobFile, error) {
+	query := `
+		INSERT INTO job_files (job_id, stage, uploaded_by, file_name, original_name, file_path, file_size, file_type, description)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	
+	result, err := r.db.Exec(query, jobID, stage, uploadedBy, fileName, originalName, filePath, fileSize, fileType, description)
+	if err != nil {
+		return nil, err
+	}
+	
+	fileID, err := result.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+	
+	// Add job update for file upload
+	_, err = r.db.Exec(`
+		INSERT INTO job_updates (job_id, user_id, stage, update_type, message, new_value)
+		VALUES (?, ?, ?, 'file_upload', ?, ?)
+	`, jobID, uploadedBy, stage, fmt.Sprintf("File uploaded: %s", originalName), fileName)
+	if err != nil {
+		log.Printf("Error adding file upload update: %v", err)
+	}
+	
+	return r.GetFileByID(int(fileID))
+}
+
+func (r *PipelineRepository) GetFilesByJobAndStage(jobID int, stage string) ([]models.JobFile, error) {
+	query := `
+		SELECT jf.id, jf.job_id, jf.stage, jf.uploaded_by, jf.file_name, jf.original_name, 
+		       jf.file_path, jf.file_size, jf.file_type, jf.description, jf.created_at,
+		       u.username as uploaded_by_user
+		FROM job_files jf
+		LEFT JOIN users u ON jf.uploaded_by = u.id
+		WHERE jf.job_id = ? AND jf.stage = ?
+		ORDER BY jf.created_at DESC
+	`
+	
+	rows, err := r.db.Query(query, jobID, stage)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	
+	var files []models.JobFile
+	for rows.Next() {
+		var file models.JobFile
+		var uploadedByUser sql.NullString
+		
+		err := rows.Scan(
+			&file.ID, &file.JobID, &file.Stage, &file.UploadedBy, &file.FileName, &file.OriginalName,
+			&file.FilePath, &file.FileSize, &file.FileType, &file.Description, &file.CreatedAt,
+			&uploadedByUser,
+		)
+		if err != nil {
+			return nil, err
+		}
+		
+		if uploadedByUser.Valid {
+			file.UploadedByUser = uploadedByUser.String
+		}
+		
+		files = append(files, file)
+	}
+	
+	return files, nil
+}
+
+func (r *PipelineRepository) GetFileByID(fileID int) (*models.JobFile, error) {
+	query := `
+		SELECT jf.id, jf.job_id, jf.stage, jf.uploaded_by, jf.file_name, jf.original_name, 
+		       jf.file_path, jf.file_size, jf.file_type, jf.description, jf.created_at,
+		       u.username as uploaded_by_user
+		FROM job_files jf
+		LEFT JOIN users u ON jf.uploaded_by = u.id
+		WHERE jf.id = ?
+	`
+	
+	var file models.JobFile
+	var uploadedByUser sql.NullString
+	
+	err := r.db.QueryRow(query, fileID).Scan(
+		&file.ID, &file.JobID, &file.Stage, &file.UploadedBy, &file.FileName, &file.OriginalName,
+		&file.FilePath, &file.FileSize, &file.FileType, &file.Description, &file.CreatedAt,
+		&uploadedByUser,
+	)
+	if err != nil {
+		return nil, err
+	}
+	
+	if uploadedByUser.Valid {
+		file.UploadedByUser = uploadedByUser.String
+	}
+	
+	return &file, nil
+}
+
+func (r *PipelineRepository) DeleteFile(fileID int, userID int) error {
+	// First check if user has permission to delete this file
+	file, err := r.GetFileByID(fileID)
+	if err != nil {
+		return err
+	}
+	
+	// Only allow deletion if user uploaded the file or is admin
+	// For now, we'll allow the uploader to delete their own files
+	if file.UploadedBy != userID {
+		return fmt.Errorf("unauthorized to delete this file")
+	}
+	
+	query := `DELETE FROM job_files WHERE id = ?`
+	_, err = r.db.Exec(query, fileID)
+	return err
 } 

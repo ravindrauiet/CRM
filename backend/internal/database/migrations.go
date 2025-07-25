@@ -11,6 +11,7 @@ func (db *DB) Migrate() error {
 	// SQL schema for 4-stage pipeline workflow
 	schema := `
 	-- Drop existing tables if they exist
+	DROP TABLE IF EXISTS job_files;
 	DROP TABLE IF EXISTS task_updates;
 	DROP TABLE IF EXISTS task_assignments;
 	DROP TABLE IF EXISTS tasks;
@@ -179,13 +180,30 @@ func (db *DB) Migrate() error {
 		FOREIGN KEY (job_id) REFERENCES pipeline_jobs(id) ON DELETE CASCADE
 	);
 
+	-- Job Files (File uploads for each stage)
+	CREATE TABLE job_files (
+		id INT AUTO_INCREMENT PRIMARY KEY,
+		job_id INT NOT NULL,
+		stage ENUM('stage1', 'stage2', 'stage3', 'stage4') NOT NULL,
+		uploaded_by INT NOT NULL,
+		file_name VARCHAR(255) NOT NULL,
+		original_name VARCHAR(255) NOT NULL,
+		file_path VARCHAR(500) NOT NULL,
+		file_size BIGINT NOT NULL,
+		file_type VARCHAR(100),
+		description TEXT,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (job_id) REFERENCES pipeline_jobs(id) ON DELETE CASCADE,
+		FOREIGN KEY (uploaded_by) REFERENCES users(id)
+	);
+
 	-- Job Updates/Comments (Timeline)
 	CREATE TABLE job_updates (
 		id INT AUTO_INCREMENT PRIMARY KEY,
 		job_id INT NOT NULL,
 		user_id INT NOT NULL,
 		stage ENUM('stage1', 'stage2', 'stage3', 'stage4') NOT NULL,
-		update_type ENUM('status_change', 'data_update', 'comment', 'stage_completion') NOT NULL,
+		update_type ENUM('status_change', 'data_update', 'comment', 'stage_completion', 'file_upload') NOT NULL,
 		message TEXT,
 		old_value VARCHAR(255),
 		new_value VARCHAR(255),

@@ -3,9 +3,14 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"maydiv-crm/internal/models"
 	"maydiv-crm/internal/repository"
@@ -170,7 +175,7 @@ func (h *PipelineHandler) HandleJobByID(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Check if user has access to this job
-	if !h.hasJobAccess(userID, job) {
+	if !h.hasJobAccess(r, jobID) {
 		http.Error(w, "Access denied", http.StatusForbidden)
 		return
 	}
@@ -322,6 +327,222 @@ func (h *PipelineHandler) HandleStage4Update(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, map[string]string{"message": "Stage 4 data updated successfully"})
 }
 
+// File upload handlers
+func (h *PipelineHandler) HandleFileUpload(w http.ResponseWriter, r *http.Request) {
+	// Parse multipart form (max 50MB)
+	err := r.ParseMultipartForm(50 << 20)
+	if err != nil {
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		return
+	}
+	
+	// Get user from session
+	userID, err := h.getUserIDFromSession(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	
+	// Get form data
+	jobIDStr := r.FormValue("job_id")
+	stage := r.FormValue("stage")
+	description := r.FormValue("description")
+	
+	if jobIDStr == "" || stage == "" {
+		http.Error(w, "Missing required fields", http.StatusBadRequest)
+		return
+	}
+	
+	jobID, err := strconv.Atoi(jobIDStr)
+	if err != nil {
+		http.Error(w, "Invalid job ID", http.StatusBadRequest)
+		return
+	}
+	
+	// Check if user has access to this job
+	if !h.hasJobAccess(r, jobID) {
+		http.Error(w, "Access denied", http.StatusForbidden)
+		return
+	}
+	
+	// Check file upload permissions based on user role and stage
+	if !h.canUploadToStage(r, jobID, stage) {
+		http.Error(w, "You don't have permission to upload files to this stage", http.StatusForbidden)
+		return
+	}
+	
+	// Get uploaded file
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "No file uploaded", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+	
+	// Create uploads directory if it doesn't exist
+	uploadDir := "uploads"
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+		log.Printf("Error creating upload directory: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	
+	// Generate unique filename
+	ext := filepath.Ext(header.Filename)
+	fileName := fmt.Sprintf("%d_%s_%d%s", jobID, stage, time.Now().Unix(), ext)
+	filePath := filepath.Join(uploadDir, fileName)
+	
+	// Create file on disk
+	dst, err := os.Create(filePath)
+	if err != nil {
+		log.Printf("Error creating file: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	defer dst.Close()
+	
+	// Copy uploaded file to destination
+	_, err = io.Copy(dst, file)
+	if err != nil {
+		log.Printf("Error copying file: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	
+	// Save file info to database
+	uploadedFile, err := h.pipelineRepo.UploadFile(
+		jobID, stage, userID, fileName, header.Filename, filePath, 
+		header.Size, header.Header.Get("Content-Type"), description,
+	)
+	if err != nil {
+		log.Printf("Error saving file info: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	
+	// Return success response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(models.FileUploadResponse{
+		Success: true,
+		Message: "File uploaded successfully",
+		File:    uploadedFile,
+	})
+}
+
+func (h *PipelineHandler) HandleFileDownload(w http.ResponseWriter, r *http.Request) {
+	// Get file ID from URL
+	fileIDStr := r.URL.Query().Get("id")
+	if fileIDStr == "" {
+		http.Error(w, "File ID required", http.StatusBadRequest)
+		return
+	}
+	
+	fileID, err := strconv.Atoi(fileIDStr)
+	if err != nil {
+		http.Error(w, "Invalid file ID", http.StatusBadRequest)
+		return
+	}
+	
+	// Get file info from database
+	file, err := h.pipelineRepo.GetFileByID(fileID)
+	if err != nil {
+		http.Error(w, "File not found", http.StatusNotFound)
+		return
+	}
+	
+	// Check if user has access to this job
+	if !h.hasJobAccess(r, file.JobID) {
+		http.Error(w, "Access denied", http.StatusForbidden)
+		return
+	}
+	
+	// Check if file exists on disk
+	if _, err := os.Stat(file.FilePath); os.IsNotExist(err) {
+		http.Error(w, "File not found on disk", http.StatusNotFound)
+		return
+	}
+	
+	// Serve file
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", file.OriginalName))
+	if file.FileType != nil {
+		w.Header().Set("Content-Type", *file.FileType)
+	}
+	http.ServeFile(w, r, file.FilePath)
+}
+
+func (h *PipelineHandler) HandleGetFiles(w http.ResponseWriter, r *http.Request) {
+	jobIDStr := r.URL.Query().Get("job_id")
+	stage := r.URL.Query().Get("stage")
+	
+	if jobIDStr == "" || stage == "" {
+		http.Error(w, "Job ID and stage required", http.StatusBadRequest)
+		return
+	}
+	
+	jobID, err := strconv.Atoi(jobIDStr)
+	if err != nil {
+		http.Error(w, "Invalid job ID", http.StatusBadRequest)
+		return
+	}
+	
+	// Check if user has access to this job
+	if !h.hasJobAccess(r, jobID) {
+		http.Error(w, "Access denied", http.StatusForbidden)
+		return
+	}
+	
+	// Get files for this job and stage
+	files, err := h.pipelineRepo.GetFilesByJobAndStage(jobID, stage)
+	if err != nil {
+		log.Printf("Error getting files: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(files)
+}
+
+func (h *PipelineHandler) HandleDeleteFile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	
+	fileIDStr := r.URL.Query().Get("id")
+	if fileIDStr == "" {
+		http.Error(w, "File ID required", http.StatusBadRequest)
+		return
+	}
+	
+	fileID, err := strconv.Atoi(fileIDStr)
+	if err != nil {
+		http.Error(w, "Invalid file ID", http.StatusBadRequest)
+		return
+	}
+	
+	// Get user from session
+	userID, err := h.getUserIDFromSession(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	
+	// Delete file
+	err = h.pipelineRepo.DeleteFile(fileID, userID)
+	if err != nil {
+		log.Printf("Error deleting file: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "File deleted successfully",
+	})
+}
+
 // Private helper methods
 
 func (h *PipelineHandler) getAllJobs(w http.ResponseWriter, r *http.Request) {
@@ -393,7 +614,12 @@ func (h *PipelineHandler) extractJobID(r *http.Request) (int, error) {
 	return strconv.Atoi(pathParts[4])
 }
 
-func (h *PipelineHandler) hasJobAccess(userID int, job *models.PipelineJobResponse) bool {
+func (h *PipelineHandler) hasJobAccess(r *http.Request, jobID int) bool {
+	userID := h.getUserID(r)
+	if userID == 0 {
+		return false
+	}
+
 	user, err := h.userRepo.GetByID(userID)
 	if err != nil {
 		return false
@@ -404,6 +630,12 @@ func (h *PipelineHandler) hasJobAccess(userID int, job *models.PipelineJobRespon
 		return true
 	}
 
+	// Get job details to check role-based access
+	job, err := h.pipelineRepo.GetJobByID(jobID)
+	if err != nil {
+		return false
+	}
+
 	// Check role-based access
 	switch user.Role {
 	case "stage2_employee":
@@ -412,6 +644,47 @@ func (h *PipelineHandler) hasJobAccess(userID int, job *models.PipelineJobRespon
 		return job.AssignedToStage3 != nil && *job.AssignedToStage3 == userID
 	case "customer":
 		return job.CustomerID != nil && *job.CustomerID == userID
+	default:
+		return false
+	}
+}
+
+func (h *PipelineHandler) canUploadToStage(r *http.Request, jobID int, stage string) bool {
+	userID := h.getUserID(r)
+	if userID == 0 {
+		return false
+	}
+
+	user, err := h.userRepo.GetByID(userID)
+	if err != nil {
+		return false
+	}
+
+	// Admin and subadmin can upload to any stage
+	if user.IsAdmin || user.Role == "subadmin" {
+		return true
+	}
+
+	// Get job details to check role-based access
+	job, err := h.pipelineRepo.GetJobByID(jobID)
+	if err != nil {
+		return false
+	}
+
+	// Check role-based access for upload permission
+	switch user.Role {
+	case "stage2_employee":
+		// Stage 2 employee can only upload to stage2
+		return stage == "stage2" && job.AssignedToStage2 != nil && *job.AssignedToStage2 == userID
+	case "stage3_employee":
+		// Stage 3 employee can only upload to stage3
+		return stage == "stage3" && job.AssignedToStage3 != nil && *job.AssignedToStage3 == userID
+	case "customer":
+		// Customer can only upload to stage4
+		return stage == "stage4" && job.CustomerID != nil && *job.CustomerID == userID
+	case "stage1_employee":
+		// Stage 1 employee can only upload to stage1
+		return stage == "stage1" && job.CreatedBy == userID
 	default:
 		return false
 	}
@@ -471,4 +744,18 @@ func (h *PipelineHandler) getUserID(r *http.Request) int {
 	}
 
 	return userID
+}
+
+func (h *PipelineHandler) getUserIDFromSession(r *http.Request) (int, error) {
+	session, err := h.sessionStore.Get(r, "session")
+	if err != nil {
+		return 0, err
+	}
+
+	userID, ok := session.Values["user_id"].(int)
+	if !ok {
+		return 0, fmt.Errorf("user not authenticated")
+	}
+
+	return userID, nil
 } 
