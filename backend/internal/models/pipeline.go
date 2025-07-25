@@ -12,6 +12,7 @@ type PipelineJob struct {
 	AssignedToStage2 *int      `json:"assigned_to_stage2" db:"assigned_to_stage2"`
 	AssignedToStage3 *int      `json:"assigned_to_stage3" db:"assigned_to_stage3"`
 	CustomerID       *int      `json:"customer_id" db:"customer_id"`
+	NotificationEmail *string  `json:"notification_email" db:"notification_email"`
 	CreatedAt        time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at" db:"updated_at"`
 }
@@ -200,6 +201,7 @@ type Stage1CreateRequest struct {
 	AssignedToStage2      int    `json:"assigned_to_stage2"`
 	AssignedToStage3      int    `json:"assigned_to_stage3"`
 	CustomerID            int    `json:"customer_id"`
+	NotificationEmail     string `json:"notification_email"`
 }
 
 type Stage2UpdateRequest struct {

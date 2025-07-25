@@ -44,6 +44,7 @@ func (db *DB) Migrate() error {
 		assigned_to_stage2 INT NULL,
 		assigned_to_stage3 INT NULL,
 		customer_id INT NULL,
+		notification_email VARCHAR(255) DEFAULT NULL,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 		FOREIGN KEY (created_by) REFERENCES users(id),

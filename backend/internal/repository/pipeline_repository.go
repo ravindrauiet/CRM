@@ -23,7 +23,7 @@ func (r *PipelineRepository) GetAllJobs() ([]models.PipelineJobResponse, error) 
 		SELECT 
 			pj.id, pj.job_no, pj.current_stage, pj.status, pj.created_by, 
 			pj.assigned_to_stage2, pj.assigned_to_stage3, pj.customer_id,
-			pj.created_at, pj.updated_at,
+			pj.notification_email, pj.created_at, pj.updated_at,
 			u1.username as created_by_user,
 			u2.username as stage2_user_name,
 			u3.username as stage3_user_name,
@@ -50,7 +50,7 @@ func (r *PipelineRepository) GetAllJobs() ([]models.PipelineJobResponse, error) 
 		err := rows.Scan(
 			&job.ID, &job.JobNo, &job.CurrentStage, &job.Status, &job.CreatedBy,
 			&job.AssignedToStage2, &job.AssignedToStage3, &job.CustomerID,
-			&job.CreatedAt, &job.UpdatedAt,
+			&job.NotificationEmail, &job.CreatedAt, &job.UpdatedAt,
 			&job.CreatedByUser, &stage2UserName, &stage3UserName, &customerName,
 		)
 		if err != nil {
@@ -86,7 +86,7 @@ func (r *PipelineRepository) GetJobByID(jobID int) (*models.PipelineJobResponse,
 		SELECT 
 			pj.id, pj.job_no, pj.current_stage, pj.status, pj.created_by, 
 			pj.assigned_to_stage2, pj.assigned_to_stage3, pj.customer_id,
-			pj.created_at, pj.updated_at,
+			pj.notification_email, pj.created_at, pj.updated_at,
 			u1.username as created_by_user,
 			u2.username as stage2_user_name,
 			u3.username as stage3_user_name,
@@ -106,7 +106,7 @@ func (r *PipelineRepository) GetJobByID(jobID int) (*models.PipelineJobResponse,
 	err := r.db.QueryRow(query, jobID).Scan(
 		&job.ID, &job.JobNo, &job.CurrentStage, &job.Status, &job.CreatedBy,
 		&job.AssignedToStage2, &job.AssignedToStage3, &job.CustomerID,
-		&job.CreatedAt, &job.UpdatedAt,
+		&job.NotificationEmail, &job.CreatedAt, &job.UpdatedAt,
 		&job.CreatedByUser, &stage2UserName, &stage3UserName, &customerName,
 	)
 	if err != nil {
@@ -151,7 +151,7 @@ func (r *PipelineRepository) GetJobsByUserRole(userID int, role string) ([]model
 			SELECT 
 				pj.id, pj.job_no, pj.current_stage, pj.status, pj.created_by, 
 				pj.assigned_to_stage2, pj.assigned_to_stage3, pj.customer_id,
-				pj.created_at, pj.updated_at,
+				pj.notification_email, pj.created_at, pj.updated_at,
 				u1.username as created_by_user,
 				u2.username as stage2_user_name,
 				u3.username as stage3_user_name,
@@ -169,7 +169,7 @@ func (r *PipelineRepository) GetJobsByUserRole(userID int, role string) ([]model
 			SELECT 
 				pj.id, pj.job_no, pj.current_stage, pj.status, pj.created_by, 
 				pj.assigned_to_stage2, pj.assigned_to_stage3, pj.customer_id,
-				pj.created_at, pj.updated_at,
+				pj.notification_email, pj.created_at, pj.updated_at,
 				u1.username as created_by_user
 			FROM pipeline_jobs pj
 			LEFT JOIN users u1 ON pj.created_by = u1.id
@@ -183,7 +183,7 @@ func (r *PipelineRepository) GetJobsByUserRole(userID int, role string) ([]model
 			SELECT 
 				pj.id, pj.job_no, pj.current_stage, pj.status, pj.created_by, 
 				pj.assigned_to_stage2, pj.assigned_to_stage3, pj.customer_id,
-				pj.created_at, pj.updated_at,
+				pj.notification_email, pj.created_at, pj.updated_at,
 				u1.username as created_by_user
 			FROM pipeline_jobs pj
 			LEFT JOIN users u1 ON pj.created_by = u1.id
@@ -197,7 +197,7 @@ func (r *PipelineRepository) GetJobsByUserRole(userID int, role string) ([]model
 			SELECT 
 				pj.id, pj.job_no, pj.current_stage, pj.status, pj.created_by, 
 				pj.assigned_to_stage2, pj.assigned_to_stage3, pj.customer_id,
-				pj.created_at, pj.updated_at,
+				pj.notification_email, pj.created_at, pj.updated_at,
 				u1.username as created_by_user
 			FROM pipeline_jobs pj
 			LEFT JOIN users u1 ON pj.created_by = u1.id
@@ -209,7 +209,7 @@ func (r *PipelineRepository) GetJobsByUserRole(userID int, role string) ([]model
 			SELECT 
 				pj.id, pj.job_no, pj.current_stage, pj.status, pj.created_by, 
 				pj.assigned_to_stage2, pj.assigned_to_stage3, pj.customer_id,
-				pj.created_at, pj.updated_at,
+				pj.notification_email, pj.created_at, pj.updated_at,
 				u1.username as created_by_user
 			FROM pipeline_jobs pj
 			LEFT JOIN users u1 ON pj.created_by = u1.id
@@ -274,7 +274,7 @@ func (r *PipelineRepository) GetJobsByUserRole(userID int, role string) ([]model
 			err := rows.Scan(
 				&job.ID, &job.JobNo, &job.CurrentStage, &job.Status, &job.CreatedBy,
 				&job.AssignedToStage2, &job.AssignedToStage3, &job.CustomerID,
-				&job.CreatedAt, &job.UpdatedAt, &job.CreatedByUser,
+				&job.NotificationEmail, &job.CreatedAt, &job.UpdatedAt, &job.CreatedByUser,
 				&stage2UserName, &stage3UserName, &customerName,
 			)
 			if err != nil {
@@ -295,7 +295,7 @@ func (r *PipelineRepository) GetJobsByUserRole(userID int, role string) ([]model
 			err := rows.Scan(
 				&job.ID, &job.JobNo, &job.CurrentStage, &job.Status, &job.CreatedBy,
 				&job.AssignedToStage2, &job.AssignedToStage3, &job.CustomerID,
-				&job.CreatedAt, &job.UpdatedAt, &job.CreatedByUser,
+				&job.NotificationEmail, &job.CreatedAt, &job.UpdatedAt, &job.CreatedByUser,
 			)
 			if err != nil {
 				return nil, err
@@ -323,9 +323,9 @@ func (r *PipelineRepository) CreateJob(req *models.Stage1CreateRequest, createdB
 
 	// Create pipeline job
 	jobResult, err := tx.Exec(`
-		INSERT INTO pipeline_jobs (job_no, current_stage, status, created_by, assigned_to_stage2, assigned_to_stage3, customer_id)
-		VALUES (?, 'stage1', 'active', ?, ?, ?, ?)
-	`, req.JobNo, createdBy, nullInt(req.AssignedToStage2), nullInt(req.AssignedToStage3), nullInt(req.CustomerID))
+		INSERT INTO pipeline_jobs (job_no, current_stage, status, created_by, assigned_to_stage2, assigned_to_stage3, customer_id, notification_email)
+		VALUES (?, 'stage1', 'active', ?, ?, ?, ?, ?)
+	`, req.JobNo, createdBy, nullInt(req.AssignedToStage2), nullInt(req.AssignedToStage3), nullInt(req.CustomerID), req.NotificationEmail)
 	if err != nil {
 		return nil, err
 	}

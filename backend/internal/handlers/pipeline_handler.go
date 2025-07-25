@@ -9,6 +9,7 @@ import (
 
 	"maydiv-crm/internal/models"
 	"maydiv-crm/internal/repository"
+	"maydiv-crm/internal/services"
 
 	"github.com/gorilla/sessions"
 )
@@ -17,13 +18,15 @@ type PipelineHandler struct {
 	pipelineRepo *repository.PipelineRepository
 	userRepo     *repository.UserRepository
 	sessionStore *sessions.CookieStore
+	notificationService *services.NotificationService
 }
 
-func NewPipelineHandler(pipelineRepo *repository.PipelineRepository, userRepo *repository.UserRepository, sessionStore *sessions.CookieStore) *PipelineHandler {
+func NewPipelineHandler(pipelineRepo *repository.PipelineRepository, userRepo *repository.UserRepository, sessionStore *sessions.CookieStore, notificationService *services.NotificationService) *PipelineHandler {
 	return &PipelineHandler{
 		pipelineRepo: pipelineRepo,
 		userRepo:     userRepo,
 		sessionStore: sessionStore,
+		notificationService: notificationService,
 	}
 }
 
@@ -213,6 +216,13 @@ func (h *PipelineHandler) HandleStage2Update(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Send notification to admin about stage completion
+	go func() {
+		if err := h.notificationService.NotifyStageCompletion(jobID, "stage2", userID); err != nil {
+			fmt.Printf("Failed to send stage 2 completion notification: %v\n", err)
+		}
+	}()
+
 	writeJSON(w, map[string]string{"message": "Stage 2 data updated successfully"})
 }
 
@@ -254,6 +264,13 @@ func (h *PipelineHandler) HandleStage3Update(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Send notification to admin about stage completion
+	go func() {
+		if err := h.notificationService.NotifyStageCompletion(jobID, "stage3", userID); err != nil {
+			fmt.Printf("Failed to send stage 3 completion notification: %v\n", err)
+		}
+	}()
+
 	writeJSON(w, map[string]string{"message": "Stage 3 data updated successfully"})
 }
 
@@ -294,6 +311,13 @@ func (h *PipelineHandler) HandleStage4Update(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Failed to update stage 4 data", http.StatusInternalServerError)
 		return
 	}
+
+	// Send notification to admin about stage completion
+	go func() {
+		if err := h.notificationService.NotifyStageCompletion(jobID, "stage4", userID); err != nil {
+			fmt.Printf("Failed to send stage 4 completion notification: %v\n", err)
+		}
+	}()
 
 	writeJSON(w, map[string]string{"message": "Stage 4 data updated successfully"})
 }
@@ -349,6 +373,13 @@ func (h *PipelineHandler) createJob(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to create job", http.StatusInternalServerError)
 		return
 	}
+
+	// Send notification to admin about new job creation
+	go func() {
+		if err := h.notificationService.NotifyJobCreation(job.ID, userID); err != nil {
+			fmt.Printf("Failed to send job creation notification: %v\n", err)
+		}
+	}()
 
 	writeJSON(w, job)
 }

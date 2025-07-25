@@ -63,6 +63,7 @@ func main() {
 	
 	// Initialize services
 	authService := services.NewAuthService(userRepo)
+	notificationService := services.NewNotificationService(db.DB)
 	
 	// Initialize session store
 	sessionKey := os.Getenv("SESSION_KEY")
@@ -85,7 +86,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService, sessionStore)
 	userHandler := handlers.NewUserHandler(userRepo, sessionStore)
 	taskHandler := handlers.NewTaskHandler(taskRepo, sessionStore)
-	pipelineHandler := handlers.NewPipelineHandler(pipelineRepo, userRepo, sessionStore)
+	pipelineHandler := handlers.NewPipelineHandler(pipelineRepo, userRepo, sessionStore, notificationService)
 	
 	// Setup routes
 	mux := http.NewServeMux()
@@ -361,6 +362,55 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"jobs": results,
 			"count": len(results),
+		})
+	})
+	
+	// Test email endpoint
+	mux.HandleFunc("/api/test-email", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		
+		// Test email connection
+		if err := notificationService.EmailService.TestEmailConnection(); err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+		
+		// Send a test email
+		adminEmail := os.Getenv("ADMIN_EMAIL")
+		if adminEmail == "" {
+			adminEmail = "admin@maydiv.com"
+		}
+		
+		emailData := services.StageCompletionEmail{
+			JobNo:       "TEST-001",
+			JobTitle:    "Test Job",
+			Stage:       "stage2",
+			StageName:   "Stage 2 - Customs & Documentation",
+			CompletedBy: "Test User",
+			CompletedAt: "2024-01-20 10:30:00",
+			NextStage:   "Stage 3 - Clearance & Logistics",
+			AdminEmail:  adminEmail,
+		}
+		
+		if err := notificationService.EmailService.SendStageCompletionEmail(emailData); err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": false,
+				"error":   err.Error(),
+			})
+			return
+		}
+		
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Test email sent successfully",
 		})
 	})
 	
